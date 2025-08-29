@@ -202,9 +202,9 @@ function setLoading(loading, type = 'check') {
         checkBtn.disabled = false;
         rephraseBtn.disabled = false;
         smartCheckBtn.disabled = false;
-        checkBtn.innerHTML = '<i class="fas fa-search"></i> تحقق من النص';
-        rephraseBtn.innerHTML = '<i class="fas fa-magic"></i> أعد صياغة بالنموذج الذكي';
-        smartCheckBtn.innerHTML = '<i class="fas fa-robot"></i> تحقق ذكي';
+        checkBtn.innerHTML = '<i class="fas fa-check"></i> تحقق من النص 47/';
+        rephraseBtn.innerHTML = '<i class="fas fa-sync-alt"></i> أعد صياغة';
+        smartCheckBtn.innerHTML = '<i class="fas fa-robot"></i> تحقق ذكي 95/';
         loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
     }
 }
