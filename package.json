@@ -24,6 +24,7 @@
     "express": "^4.19.2",
     "node-fetch": "^3.3.2",
     "concurrently": "^9.2.1",
-    "wait-on": "^8.0.4"
+    "wait-on": "^8.0.4",
+    "dotenv": "^16.3.1"
   }
 }

@@ -1,6 +1,7 @@
 // DOM elements
 const textInput = document.getElementById('textInput');
 const checkBtn = document.getElementById('checkBtn');
+const rephraseBtn = document.getElementById('rephraseBtn');
 const clearBtn = document.getElementById('clearBtn');
 const resultsSection = document.getElementById('resultsSection');
 const resultsContent = document.getElementById('resultsContent');
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Set up all event listeners
 function setupEventListeners() {
     checkBtn.addEventListener('click', handleCheckText);
+    rephraseBtn.addEventListener('click', handleRephraseText);
     clearBtn.addEventListener('click', handleClearText);
     
     // Ctrl+Enter shortcut for quick checking
@@ -93,16 +95,68 @@ function handleClearText() {
     focusTextInput();
 }
 
+// Handle AI text rephrasing
+async function handleRephraseText() {
+    const text = textInput.value.trim();
+    
+    if (!text) {
+        showError('يرجى إدخال نص لإعادة الصياغة');
+        return;
+    }
+    
+    if (text.length > 10000) {
+        showError('النص طويل جداً. يرجى إدخال نص أقل من 10,000 حرف');
+        return;
+    }
+    
+    setLoading(true, 'rephrase');
+    
+    try {
+        const response = await fetch('/api/rephrase', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ text })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'حدث خطأ أثناء إعادة الصياغة');
+        }
+        
+        displayRephraseResults(data);
+        
+    } catch (error) {
+        console.error('Error rephrasing text:', error);
+        showError(error.message || 'حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.');
+    } finally {
+        setLoading(false);
+    }
+}
+
 // Set loading state
-function setLoading(loading) {
+function setLoading(loading, type = 'check') {
     if (loading) {
         loadingIndicator.classList.remove('hidden');
         checkBtn.disabled = true;
-        checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+        rephraseBtn.disabled = true;
+        
+        if (type === 'rephrase') {
+            rephraseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إعادة الصياغة...';
+            loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إعادة الصياغة بالذكاء الاصطناعي...';
+        } else {
+            checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+            loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+        }
     } else {
         loadingIndicator.classList.add('hidden');
         checkBtn.disabled = false;
+        rephraseBtn.disabled = false;
         checkBtn.innerHTML = '<i class="fas fa-search"></i> تحقق من النص';
+        rephraseBtn.innerHTML = '<i class="fas fa-magic"></i> أعد صياغة بالنموذج الذكي';
+        loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
     }
 }
 
@@ -286,6 +340,60 @@ function showTemporaryMessage(message, type = 'success') {
         }
     }, 3000);
 }
+
+// Display rephrase results
+function displayRephraseResults(data) {
+    const { original, rephrased } = data;
+    
+    let html = `
+        <div class="rephrase-results">
+            <h3 class="rephrase-title">
+                <i class="fas fa-magic"></i>
+                إعادة الصياغة بالذكاء الاصطناعي
+            </h3>
+            
+            <div class="original-text-section">
+                <h4><i class="fas fa-file-text"></i> النص الأصلي:</h4>
+                <div class="text-display original-text">${escapeHtml(original)}</div>
+            </div>
+            
+            <div class="rephrased-text-section">
+                <h4><i class="fas fa-sparkles"></i> النص المُعاد صياغته:</h4>
+                <div class="text-display rephrased-text">${escapeHtml(rephrased)}</div>
+                <div class="rephrase-actions">
+                    <button class="apply-rephrase-btn" onclick="applyRephrasedText('${escapeHtml(rephrased).replace(/'/g, '\\\'')}')" title="استبدال النص الأصلي بالنص المُعاد صياغته">
+                        <i class="fas fa-check"></i>
+                        استخدم النص الجديد
+                    </button>
+                    <button class="copy-rephrase-btn" onclick="copyToClipboard('${escapeHtml(rephrased).replace(/'/g, '\\\'')}')" title="نسخ النص المُعاد صياغته">
+                        <i class="fas fa-copy"></i>
+                        نسخ
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    resultsContent.innerHTML = html;
+}
+
+// Apply rephrased text to input
+window.applyRephrasedText = function(rephrasedText) {
+    const cleanedText = rephrasedText.replace(/\\'/g, "'");
+    textInput.value = cleanedText;
+    showTemporaryMessage('تم استبدال النص بالنسخة المُعاد صياغتها!', 'success');
+    focusTextInput();
+};
+
+// Copy text to clipboard
+window.copyToClipboard = function(text) {
+    const cleanedText = text.replace(/\\'/g, "'");
+    navigator.clipboard.writeText(cleanedText).then(() => {
+        showTemporaryMessage('تم نسخ النص إلى الحافظة!', 'success');
+    }).catch(() => {
+        showTemporaryMessage('تعذر نسخ النص', 'error');
+    });
+};
 
 // Add suggestion listeners (called after displaying results)
 function addSuggestionListeners() {
