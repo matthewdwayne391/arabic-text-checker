@@ -2,6 +2,7 @@
 const textInput = document.getElementById('textInput');
 const checkBtn = document.getElementById('checkBtn');
 const rephraseBtn = document.getElementById('rephraseBtn');
+const smartCheckBtn = document.getElementById('smartCheckBtn');
 const clearBtn = document.getElementById('clearBtn');
 const resultsSection = document.getElementById('resultsSection');
 const resultsContent = document.getElementById('resultsContent');
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupEventListeners() {
     checkBtn.addEventListener('click', handleCheckText);
     rephraseBtn.addEventListener('click', handleRephraseText);
+    smartCheckBtn.addEventListener('click', handleSmartCheck);
     clearBtn.addEventListener('click', handleClearText);
     
     // Ctrl+Enter shortcut for quick checking
@@ -136,16 +138,61 @@ async function handleRephraseText() {
     }
 }
 
+// Handle AI smart check
+async function handleSmartCheck() {
+    const text = textInput.value.trim();
+    
+    if (!text) {
+        showError('يرجى إدخال نص للتحقق الذكي');
+        return;
+    }
+    
+    if (text.length > 10000) {
+        showError('النص طويل جداً. يرجى إدخال نص أقل من 10,000 حرف');
+        return;
+    }
+    
+    setLoading(true, 'smart-check');
+    
+    try {
+        const response = await fetch('/api/smart-check', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ text })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'حدث خطأ أثناء التحقق الذكي');
+        }
+        
+        displaySmartCheckResults(data);
+        
+    } catch (error) {
+        console.error('Error smart checking text:', error);
+        showError(error.message || 'حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.');
+    } finally {
+        setLoading(false);
+    }
+}
+
 // Set loading state
 function setLoading(loading, type = 'check') {
     if (loading) {
         loadingIndicator.classList.remove('hidden');
         checkBtn.disabled = true;
         rephraseBtn.disabled = true;
+        smartCheckBtn.disabled = true;
         
         if (type === 'rephrase') {
             rephraseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إعادة الصياغة...';
             loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إعادة الصياغة بالذكاء الاصطناعي...';
+        } else if (type === 'smart-check') {
+            smartCheckBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق الذكي...';
+            loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق الذكي بالذكاء الاصطناعي...';
         } else {
             checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
             loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
@@ -154,8 +201,10 @@ function setLoading(loading, type = 'check') {
         loadingIndicator.classList.add('hidden');
         checkBtn.disabled = false;
         rephraseBtn.disabled = false;
+        smartCheckBtn.disabled = false;
         checkBtn.innerHTML = '<i class="fas fa-search"></i> تحقق من النص';
         rephraseBtn.innerHTML = '<i class="fas fa-magic"></i> أعد صياغة بالنموذج الذكي';
+        smartCheckBtn.innerHTML = '<i class="fas fa-robot"></i> تحقق ذكي';
         loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
     }
 }
@@ -376,6 +425,50 @@ function displayRephraseResults(data) {
     
     resultsContent.innerHTML = html;
 }
+
+// Display smart check results
+function displaySmartCheckResults(data) {
+    const { original, corrected } = data;
+    
+    let html = `
+        <div class="smart-check-results">
+            <h3 class="smart-check-title">
+                <i class="fas fa-robot"></i>
+                التصحيح الذكي
+            </h3>
+            
+            <div class="original-text-section">
+                <h4><i class="fas fa-file-text"></i> النص الأصلي:</h4>
+                <div class="text-display original-text">${escapeHtml(original)}</div>
+            </div>
+            
+            <div class="corrected-text-section">
+                <h4><i class="fas fa-check-circle"></i> النص المُصحح:</h4>
+                <div class="text-display corrected-text">${escapeHtml(corrected)}</div>
+                <div class="smart-check-actions">
+                    <button class="apply-correction-btn" onclick="applyCorrectedText('${escapeHtml(corrected).replace(/'/g, '\\\'')}')" title="استبدال النص الأصلي بالنص المُصحح">
+                        <i class="fas fa-check"></i>
+                        استخدم النص المُصحح
+                    </button>
+                    <button class="copy-correction-btn" onclick="copyToClipboard('${escapeHtml(corrected).replace(/'/g, '\\\'')}')" title="نسخ النص المُصحح">
+                        <i class="fas fa-copy"></i>
+                        نسخ
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    resultsContent.innerHTML = html;
+}
+
+// Apply corrected text to input
+window.applyCorrectedText = function(correctedText) {
+    const cleanedText = correctedText.replace(/\\'/g, "'");
+    textInput.value = cleanedText;
+    showTemporaryMessage('تم استبدال النص بالنسخة المُصححة!', 'success');
+    focusTextInput();
+};
 
 // Apply rephrased text to input
 window.applyRephrasedText = function(rephrasedText) {
