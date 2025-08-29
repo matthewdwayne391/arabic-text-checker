@@ -1,0 +1,110 @@
+أريد مشروع كامل من الصفر يعمل على Replit لتصحيح اللغة العربية ذاتيًا عبر LanguageTool (Self-Hosted) مع واجهة SPA.
+
+## الهدف
+- تشغيل خادم LanguageTool محليًا داخل نفس الريبو (بدون خدمات خارجية).
+- Backend: Node.js + Express يطلق خادم LanguageTool (Java) كعملية فرعية ويعمل كـ proxy endpoint.
+- Frontend: صفحة HTML واحدة (Vanilla JS + CSS) مع RTL تعرض الأخطاء واقتراحات التصحيح وتسمح بتطبيق التصحيحات.
+
+## المتطلبات التقنية
+- Node.js (Express 5), openjdk (لتشغيل jar), أدوات npm: concurrently, wait-on, node-fetch.
+- replit.nix لإتاحة java + node.
+- تنزيل ملف LanguageTool server jar تلقائيًا عند التثبيت (postinstall script) أو أول تشغيل.
+- تشغيل تلقائي لخادم LanguageTool على المنفذ 8010، ثم تشغيل Express على PORT (من بيئة Replit) مع readiness check.
+- Express يقدّم static files من مجلد public.
+- Endpoint رئيسي: POST /api/check يستقبل { text } ويرسل لـ LanguageTool على http://localhost:8010/v2/check (language=ar).
+- معالجة استجابة LanguageTool (matches[]) وإرجاعها كما هي للواجهة.
+- إدارة أخطاء واضحة: إذا LanguageTool "loading" أو غير جاهز، أعد المحاولة لثوانٍ قليلة ثم أعد الرد بخطأ مفهوم.
+
+## هيكلة الملفات المطلوبة
+- replit.nix
+- package.json
+- server.js
+- scripts/download-lt.js (لتنزيل jar إن لم يكن موجودًا)
+- public/index.html
+- public/style.css
+- public/app.js
+- .gitignore
+
+## المحتوى المطلوب لكل ملف (اكتبه بالكامل)
+
+### replit.nix
+- وفّر بيئة بها nodejs, npm, openjdk, curl, unzip.
+- مثال: pkgs.nodejs-18_x, pkgs.jdk17, pkgs.curl.
+
+### package.json
+- name, version, type: "module"
+- scripts:
+  - "postinstall": "node scripts/download-lt.js"
+  - "start:lt": "java -jar ./languagetool/languagetool-server.jar --port 8010 --allow-origin '*'"
+  - "start:api": "node server.js"
+  - "start": "concurrently -k \"npm:start:lt\" \"wait-on tcp:8010 && npm:start:api\""
+- dependencies: express@5, node-fetch@3, wait-on, concurrently
+- لا تستخدم devDeps إلا لو لزم.
+
+### scripts/download-lt.js
+- Node script يقوم بالتالي:
+  1) إنشاء مجلد ./languagetool إن لم يوجد.
+  2) إن لم يوجد ملف languagetool-server.jar، نزّله من آخر إصدار مستقر (لغة عامة: رابط GitHub Releases الرسمي، اسم الملف عادة LanguageTool-*-standalone.zip).
+  3) فك الضغط إلى ./languagetool ثم إعادة تسمية ملف السيرفر إلى languagetool-server.jar (أو إيجاده داخل المحتوى المنزّل).
+  4) إن كان موجودًا بالفعل، اطبع رسالة "LanguageTool already present".
+- لا تعتمد على أدوات خارج npm غير curl/unzip المتاحة في replit.nix.
+
+### server.js
+- استيراد express, fetch (node-fetch), child_process (اختياري لو أردت إدارة العملية، لكن هنا نستخدم script start:lt).
+- إعداد express.json() و express.static("public").
+- متغيرات:
+  - const LT_URL = process.env.LT_URL || "http://localhost:8010";
+  - const PORT = process.env.PORT || 3000;
+- صحة: GET /health يعيد { ok: true }.
+- POST /api/check:
+  - التحقق من req.body.text (نوع سترينغ، طول معقول < 20KB).
+  - إرسال طلب x-www-form-urlencoded إلى `${LT_URL}/v2/check` مع الحقول:
+    - language=ar
+    - text=<user text>
+    - enabledOnly=false (اختياري)
+  - إعادة الرد JSON كما يأتي من LanguageTool (matches, language, software...).
+  - في حال تعذر الاتصال أو Unexpected response: أعد status 502 مع رسالة مفهومة.
+- app.listen(PORT, ...) وطباعة رابط السيرفر.
+
+### public/index.html
+- صفحة RTL (lang="ar" dir="rtl")، Mobile-first.
+- textarea لإدخال النص، زر "تحقق"، قسم يعرض النتائج.
+- دعم اختصار (Ctrl+Enter) لإرسال.
+- عناصر UI بسيطة مع Font Awesome (CDN) للأيقونات.
+- توضيح الاستخدام: اكتب نص عربي ثم اضغط "تحقق".
+- مساحة لعرض الأخطاء مع تمييز النص الأصلي وUnderlines عبر CSS أو عبر قائمة "matches".
+
+### public/style.css
+- تنسيق بسيط، خطوط مناسبة للـ RTL، ألوان هادئة، تظليل للأخطاء (underline wavy).
+- صنف .error-underline مع text-decoration: underline wavy.
+- صنف .suggestion-badge لأزرار تطبيق الإصلاح.
+
+### public/app.js
+- التفاعل مع DOM:
+  - جلب textarea, زر "تحقق", div النتائج.
+  - عند الضغط: fetch("/api/check", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text }) })
+  - لو الرد يحتوي matches[]:
+    - اعرض قائمة الأخطاء: لكل match (offset, length, message, replacements[])
+    - زر "تطبيق" لتطبيق أفضل اقتراح (أول replacement) في النص الأصلي (تعديل في الذاكرة ثم تحديث textarea).
+  - لو لا توجد matches: رسالة "لا توجد أخطاء".
+  - معالجة أخطاء الشبكة برسالة واضحة للمستخدم.
+- دعم Ctrl+Enter لإرسال.
+
+### .gitignore
+- node_modules
+- languagetool/*
+- !languagetool/.keep (اختياري)
+- .replit
+- npm-debug.log
+
+## ملاحظات مهمة
+- تأكد أن replit.nix يثبت jdk و unzip.
+- اسكربت التحميل يجب أن يتعامل مع تغير اسم الإصدار (ابحث عن آخر إصدار عبر curl إلى GitHub API أو استخدم رابط إصدار ثابت معروف لإصدار مستقر، وإن تعذر ذلك استعمل رابط مباشر لإصدار شائع مثل 6.6). المهم أن يعمل تلقائيًا.
+- عند بدء المشروع لأول مرة، postinstall ينزّل LanguageTool ويجهزه.
+- عند "Run"، شغّل npm start (الذي يشغّل LT ثم الـ API بعد جاهزية منفذ 8010).
+- اختبار سريع: أدخل نصًا مثل "انا احب لاغة البرمجه" ثم اضغط "تحقق"، يجب أن تظهر matches باقتراحات تصحيح.
+
+## خرج نهائي متوقع
+- رابط Replit يعمل: / (واجهة)، /api/check (خلفية).
+- عند وجود أخطاء في العربية، تظهر الاقتراحات ويمكن تطبيقها.
+- سجّل الأخطاء في السيرفر للديبغ، لكن لا تُرجع Stack Traces للواجهة.
