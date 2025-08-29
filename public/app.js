@@ -1,0 +1,339 @@
+// DOM elements
+const textInput = document.getElementById('textInput');
+const checkBtn = document.getElementById('checkBtn');
+const clearBtn = document.getElementById('clearBtn');
+const resultsSection = document.getElementById('resultsSection');
+const resultsContent = document.getElementById('resultsContent');
+const loadingIndicator = document.getElementById('loadingIndicator');
+
+// State
+let currentText = '';
+let currentMatches = [];
+
+// Initialize the application
+document.addEventListener('DOMContentLoaded', function() {
+    setupEventListeners();
+    focusTextInput();
+});
+
+// Set up all event listeners
+function setupEventListeners() {
+    checkBtn.addEventListener('click', handleCheckText);
+    clearBtn.addEventListener('click', handleClearText);
+    
+    // Ctrl+Enter shortcut for quick checking
+    textInput.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            handleCheckText();
+        }
+    });
+    
+    // Auto-resize textarea
+    textInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+    });
+}
+
+// Focus on text input
+function focusTextInput() {
+    textInput.focus();
+}
+
+// Handle text checking
+async function handleCheckText() {
+    const text = textInput.value.trim();
+    
+    if (!text) {
+        showError('يرجى إدخال نص للتحقق منه');
+        return;
+    }
+    
+    if (text.length > 20000) {
+        showError('النص طويل جداً. يرجى إدخال نص أقل من 20,000 حرف');
+        return;
+    }
+    
+    currentText = text;
+    setLoading(true);
+    
+    try {
+        const response = await fetch('/api/check', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ text })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'حدث خطأ أثناء التحقق من النص');
+        }
+        
+        currentMatches = data.matches || [];
+        displayResults(data);
+        
+    } catch (error) {
+        console.error('Error checking text:', error);
+        showError(error.message || 'حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.');
+    } finally {
+        setLoading(false);
+    }
+}
+
+// Handle clear text
+function handleClearText() {
+    textInput.value = '';
+    currentText = '';
+    currentMatches = [];
+    showWelcomeMessage();
+    focusTextInput();
+}
+
+// Set loading state
+function setLoading(loading) {
+    if (loading) {
+        loadingIndicator.classList.remove('hidden');
+        checkBtn.disabled = true;
+        checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+    } else {
+        loadingIndicator.classList.add('hidden');
+        checkBtn.disabled = false;
+        checkBtn.innerHTML = '<i class="fas fa-search"></i> تحقق من النص';
+    }
+}
+
+// Display results
+function displayResults(data) {
+    const matches = data.matches || [];
+    
+    if (matches.length === 0) {
+        showSuccessMessage('ممتاز! لم يتم العثور على أخطاء في النص.');
+        return;
+    }
+    
+    let html = `
+        <div class="results-summary">
+            <p><strong>تم العثور على ${matches.length} ${matches.length === 1 ? 'خطأ' : 'أخطاء'}</strong></p>
+        </div>
+    `;
+    
+    matches.forEach((match, index) => {
+        html += createMatchHTML(match, index);
+    });
+    
+    resultsContent.innerHTML = html;
+    
+    // Add event listeners for suggestion buttons
+    addSuggestionListeners();
+}
+
+// Create HTML for a single match
+function createMatchHTML(match, index) {
+    const context = getMatchContext(match);
+    const suggestions = match.replacements || [];
+    
+    let suggestionsHTML = '';
+    if (suggestions.length > 0) {
+        suggestionsHTML = `
+            <div class="suggestions">
+                ${suggestions.slice(0, 5).map((suggestion, i) => 
+                    `<button class="suggestion-badge" 
+                             onclick="applySuggestion(${index}, ${i})" 
+                             title="انقر لتطبيق هذا التصحيح">
+                        ${escapeHtml(suggestion.value)}
+                     </button>`
+                ).join('')}
+            </div>
+        `;
+    }
+    
+    return `
+        <div class="match-item" data-match-index="${index}">
+            <div class="match-header">
+                <span class="match-type">
+                    ${getMatchTypeText(match.rule?.category?.id || 'UNKNOWN')}
+                </span>
+            </div>
+            
+            <div class="match-context">
+                ${context}
+            </div>
+            
+            <div class="match-message">
+                <i class="fas fa-info-circle"></i>
+                ${escapeHtml(match.message || 'خطأ محتمل')}
+            </div>
+            
+            ${suggestionsHTML}
+        </div>
+    `;
+}
+
+// Get context around the error
+function getMatchContext(match) {
+    const start = Math.max(0, match.offset - 20);
+    const end = Math.min(currentText.length, match.offset + match.length + 20);
+    
+    const before = currentText.substring(start, match.offset);
+    const error = currentText.substring(match.offset, match.offset + match.length);
+    const after = currentText.substring(match.offset + match.length, end);
+    
+    return `${escapeHtml(before)}<span class="match-error">${escapeHtml(error)}</span>${escapeHtml(after)}`;
+}
+
+// Apply suggestion
+window.applySuggestion = function(matchIndex, suggestionIndex) {
+    const match = currentMatches[matchIndex];
+    const suggestion = match.replacements[suggestionIndex];
+    
+    if (!match || !suggestion) {
+        console.error('Invalid match or suggestion index');
+        return;
+    }
+    
+    // Apply the suggestion to the text
+    const newText = currentText.substring(0, match.offset) + 
+                   suggestion.value + 
+                   currentText.substring(match.offset + match.length);
+    
+    // Update the textarea
+    textInput.value = newText;
+    currentText = newText;
+    
+    // Show success feedback
+    showTemporaryMessage('تم تطبيق التصحيح بنجاح!', 'success');
+    
+    // Automatically recheck the text
+    setTimeout(() => {
+        handleCheckText();
+    }, 500);
+};
+
+// Get match type text in Arabic
+function getMatchTypeText(categoryId) {
+    const types = {
+        'GRAMMAR': 'نحو',
+        'SPELLING': 'إملاء',
+        'PUNCTUATION': 'ترقيم',
+        'TYPOGRAPHY': 'طباعة',
+        'STYLE': 'أسلوب',
+        'UNKNOWN': 'أخرى'
+    };
+    
+    return types[categoryId] || 'أخرى';
+}
+
+// Show error message
+function showError(message) {
+    resultsContent.innerHTML = `
+        <div class="error-message">
+            <i class="fas fa-exclamation-triangle"></i>
+            ${escapeHtml(message)}
+        </div>
+    `;
+}
+
+// Show success message
+function showSuccessMessage(message) {
+    resultsContent.innerHTML = `
+        <div class="success-message">
+            <i class="fas fa-check-circle"></i>
+            ${escapeHtml(message)}
+        </div>
+    `;
+}
+
+// Show welcome message
+function showWelcomeMessage() {
+    resultsContent.innerHTML = `
+        <div class="welcome-message">
+            <i class="fas fa-arrow-up"></i>
+            أدخل نصاً في الحقل أعلاه واضغط "تحقق من النص" لبدء التصحيح
+        </div>
+    `;
+}
+
+// Show temporary message
+function showTemporaryMessage(message, type = 'success') {
+    const className = type === 'success' ? 'success-message' : 'error-message';
+    const icon = type === 'success' ? 'check-circle' : 'exclamation-triangle';
+    
+    // Create temporary message element
+    const messageEl = document.createElement('div');
+    messageEl.className = `${className} temporary-message`;
+    messageEl.innerHTML = `
+        <i class="fas fa-${icon}"></i>
+        ${escapeHtml(message)}
+    `;
+    messageEl.style.position = 'fixed';
+    messageEl.style.top = '20px';
+    messageEl.style.left = '50%';
+    messageEl.style.transform = 'translateX(-50%)';
+    messageEl.style.zIndex = '9999';
+    messageEl.style.minWidth = '300px';
+    messageEl.style.textAlign = 'center';
+    
+    document.body.appendChild(messageEl);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        if (messageEl.parentNode) {
+            messageEl.parentNode.removeChild(messageEl);
+        }
+    }, 3000);
+}
+
+// Add suggestion listeners (called after displaying results)
+function addSuggestionListeners() {
+    // Listeners are added via onclick attributes in the HTML
+    // This function is kept for potential future enhancements
+}
+
+// Utility function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Add some keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Escape key clears the current operation
+    if (e.key === 'Escape') {
+        if (!loadingIndicator.classList.contains('hidden')) {
+            // Cancel current operation (if possible)
+            setLoading(false);
+        }
+    }
+    
+    // F5 or Ctrl+R to refresh and clear
+    if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+        handleClearText();
+    }
+});
+
+// Handle online/offline status
+window.addEventListener('online', function() {
+    showTemporaryMessage('تم استعادة الاتصال بالإنترنت', 'success');
+});
+
+window.addEventListener('offline', function() {
+    showTemporaryMessage('تم فقدان الاتصال بالإنترنت', 'error');
+});
+
+// Performance optimization: debounce function for future use
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}

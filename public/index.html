@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مصحح اللغة العربية</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <i class="fas fa-spell-check"></i>
+                مصحح اللغة العربية
+            </h1>
+            <p class="subtitle">أداة تصحيح القواعد والإملاء للنصوص العربية</p>
+        </header>
+
+        <main class="main-content">
+            <div class="input-section">
+                <label for="textInput" class="input-label">
+                    <i class="fas fa-edit"></i>
+                    أدخل النص المراد تصحيحه
+                </label>
+                <div class="input-container">
+                    <textarea 
+                        id="textInput" 
+                        class="text-input" 
+                        placeholder="اكتب أو الصق النص العربي هنا للتحقق من الأخطاء النحوية والإملائية..."
+                        rows="8"
+                    ></textarea>
+                    <div class="input-actions">
+                        <button id="checkBtn" class="check-btn">
+                            <i class="fas fa-search"></i>
+                            تحقق من النص
+                        </button>
+                        <button id="clearBtn" class="clear-btn">
+                            <i class="fas fa-trash"></i>
+                            مسح
+                        </button>
+                    </div>
+                </div>
+                <div class="hint">
+                    <i class="fas fa-lightbulb"></i>
+                    يمكنك استخدام Ctrl + Enter للتحقق السريع من النص
+                </div>
+            </div>
+
+            <div class="results-section" id="resultsSection">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-list-ul"></i>
+                        نتائج التحقق
+                    </h2>
+                    <div id="loadingIndicator" class="loading hidden">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        جاري التحقق...
+                    </div>
+                </div>
+                
+                <div id="resultsContent" class="results-content">
+                    <div class="welcome-message">
+                        <i class="fas fa-arrow-up"></i>
+                        أدخل نصاً في الحقل أعلاه واضغط "تحقق من النص" لبدء التصحيح
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>
+                <i class="fas fa-heart"></i>
+                مدعوم بـ LanguageTool
+            </p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
