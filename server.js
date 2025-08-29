@@ -13,7 +13,9 @@ const __dirname = dirname(__filename);
 const app = express();
 
 // Configuration
-const LT_URL = process.env.LT_URL || "http://localhost:8010";
+// متغير بيئة لرابط خدمة LanguageTool (للنشر على Render أو التشغيل المحلي)
+const LT_API_URL = process.env.LT_API_URL || "http://localhost:8010/v2/check";
+const LT_URL = process.env.LT_URL || "http://localhost:8010"; // للتوافق مع النظام الحالي
 const PORT = process.env.PORT || 5000; // Use port 5000 for frontend visibility
 
 // Middleware
@@ -59,7 +61,9 @@ app.post('/api/check', async (req, res) => {
     console.log(`Checking text with LanguageTool: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
 
     // Make request to LanguageTool server
-    const response = await fetch(`${LT_URL}/v2/check`, {
+    // استخدام رابط API الجديد الذي يدعم الخدمات المنفصلة
+    const ltApiUrl = process.env.LT_API_URL || `${LT_URL}/v2/check`;
+    const response = await fetch(ltApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',

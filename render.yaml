@@ -1,0 +1,40 @@
+
+# Render Deployment Configuration
+# تكوين النشر على Render لخدمتين منفصلتين
+
+services:
+  # خدمة LanguageTool منفصلة
+  - type: web
+    name: lt-service
+    env: docker
+    dockerfilePath: ./lt-service/Dockerfile
+    plan: starter
+    buildCommand: ""
+    startCommand: ""
+    envVars:
+      - key: PORT
+        value: 8010
+    healthCheckPath: /v2/check
+    numInstances: 1
+
+  # خدمة التطبيق الرئيسية (Node.js API + Gemini + الواجهة)
+  - type: web
+    name: app-service
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm run start:api
+    envVars:
+      # رابط خدمة LanguageTool (سيتم تحديثه تلقائياً بواسطة Render)
+      - key: LT_API_URL
+        value: https://lt-service.onrender.com/v2/check
+      # مفتاح Gemini API (يجب إضافته يدوياً في لوحة تحكم Render)
+      - key: GEMINI_API_KEY
+        sync: false
+    healthCheckPath: /health
+    numInstances: 1
+
+# ملاحظات:
+# 1. يجب تحديث LT_API_URL ليشير إلى الرابط الفعلي لخدمة lt-service بعد النشر
+# 2. يجب إضافة GEMINI_API_KEY يدوياً في لوحة تحكم Render لأسباب أمنية
+# 3. الخدمتان ستعملان بشكل منفصل ومستقل

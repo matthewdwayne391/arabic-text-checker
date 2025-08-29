@@ -8,6 +8,7 @@
     "postinstall": "node scripts/download-lt.js",
     "start:lt": "./languagetool/start-server.sh --port 8010 --allow-origin '*'",
     "start:api": "node server.js",
+    "start:api-only": "node server.js",
     "start": "concurrently -k \"npm run start:lt\" \"wait-on tcp:8010 && npm run start:api\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
