@@ -5,11 +5,9 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "postinstall": "node scripts/download-lt.js",
-    "start:lt": "./languagetool/start-server.sh --port 8010 --allow-origin '*'",
+    "start": "node server.js",
     "start:api": "node server.js",
     "start:api-only": "node server.js",
-    "start": "concurrently -k \"npm run start:lt\" \"wait-on tcp:8010 && npm run start:api\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -24,8 +22,6 @@
   "dependencies": {
     "express": "^4.19.2",
     "node-fetch": "^3.3.2",
-    "concurrently": "^9.2.1",
-    "wait-on": "^8.0.4",
     "dotenv": "^16.3.1"
   }
 }
